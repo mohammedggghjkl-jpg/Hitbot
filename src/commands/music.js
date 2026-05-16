@@ -1,8 +1,8 @@
-import { SlashCommandBuilder, ChannelType } from 'discord.js';
-import { createEmbed, errorEmbed, successEmbed } from '../../utils/embeds.js';
+import { SlashCommandBuilder } from 'discord.js';
+import { createEmbed, errorEmbed } from '../../utils/embeds.js';
 import { logger } from '../../utils/logger.js';
 import { handleInteractionError } from '../../utils/errorHandler.js';
-import { getColor } from '../../config/bot.js';
+import {
   joinVoiceChannel,
   createAudioPlayer,
   createAudioResource,
@@ -37,9 +37,8 @@ export default {
 
       if (sub === 'play') {
         const url = interaction.options.getString('url');
-
-        // تأكد المستخدم في روم صوتي
         const voiceChannel = interaction.member?.voice?.channel;
+
         if (!voiceChannel) {
           return interaction.reply({
             embeds: [errorEmbed('لازم تكون في روم صوتي!')],
@@ -47,7 +46,6 @@ export default {
           });
         }
 
-        // تحقق إن الرابط يوتيوب
         if (!ytdl.validateURL(url)) {
           return interaction.reply({
             embeds: [errorEmbed('رابط YouTube غير صحيح!')],
@@ -57,17 +55,14 @@ export default {
 
         await interaction.deferReply();
 
-        // ادخل الروم الصوتي
         const connection = joinVoiceChannel({
           channelId: voiceChannel.id,
           guildId: interaction.guild.id,
           adapterCreator: interaction.guild.voiceAdapterCreator,
         });
 
-        // انتظر الاتصال
         await entersState(connection, VoiceConnectionStatus.Ready, 10_000);
 
-        // شغل الصوت
         const stream = ytdl(url, { filter: 'audioonly', quality: 'highestaudio' });
         const resource = createAudioResource(stream);
         const player = createAudioPlayer();
@@ -75,14 +70,10 @@ export default {
         player.play(resource);
         connection.subscribe(player);
 
-        // جلب معلومات الفيديو
         const info = await ytdl.getBasicInfo(url);
         const title = info.videoDetails.title;
 
-        player.on(AudioPlayerStatus.Idle, () => {
-          connection.destroy();
-        });
-
+        player.on(AudioPlayerStatus.Idle, () => connection.destroy());
         player.on('error', err => {
           logger.error('Music player error:', err);
           connection.destroy();
@@ -111,10 +102,7 @@ export default {
           });
         }
 
-        const connection = interaction.client.voice?.adapters?.get(interaction.guild.id);
-        if (connection) {
-          connection.destroy();
-        }
+        connection?.destroy();
 
         return interaction.reply({
           embeds: [createEmbed({ title: '⏹️ Stopped', description: 'تم إيقاف الموسيقى.' })],
